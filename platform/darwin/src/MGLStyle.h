@@ -275,7 +275,7 @@ MGL_EXPORT
  
  The default value of this property is `YES`.
  */
-@property (nonatomic, assign) BOOL enablePlacementTransitions;
+@property (nonatomic, assign) BOOL performsPlacementTransitions;
 
 /**
  Returns a source with the given identifier in the current style.
@@ -551,7 +551,7 @@ MGL_EXPORT
  
  This method automatically modifies the text property of any symbol style layer
  in the style whose source is the
- <a href="https://www.mapbox.com/vector-tiles/mapbox-streets-v7/#overview">Mapbox Streets source</a>.
+ <a href="https://www.mapbox.com/vector-tiles/mapbox-streets-v8/#overview">Mapbox Streets source</a>.
  On iOS, the user can set the system’s preferred language in Settings, General
  Settings, Language & Region. On macOS, the user can set the system’s preferred
  language in the Language & Region pane of System Preferences.
