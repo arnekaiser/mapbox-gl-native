@@ -152,9 +152,6 @@ const CGFloat MGLAnnotationImagePaddingForCallout = 1;
 
 const CGSize MGLAnnotationAccessibilityElementMinimumSize = CGSizeMake(10, 10);
 
-/// Padding to edge of view that an offscreen annotation must have when being brought onscreen (by being selected)
-const UIEdgeInsets MGLMapViewOffscreenAnnotationPadding = UIEdgeInsetsMake(-20.0f, -20.0f, -20.0f, -20.0f);
-
 /// An indication that the requested annotation was not found or is nonexistent.
 enum { MGLAnnotationTagNotFound = UINT32_MAX };
 
@@ -229,6 +226,11 @@ public:
 
 /// Currently shown popover representing the selected annotation.
 @property (nonatomic) UIView<MGLCalloutView> *calloutViewForSelectedAnnotation;
+
+/// Anchor coordinate from which to present callout views (for example, for shapes this
+/// could be the touch point rather than its centroid)
+@property (nonatomic) CLLocationCoordinate2D anchorCoordinateForSelectedAnnotation;
+
 @property (nonatomic) MGLUserLocationAnnotationView *userLocationAnnotationView;
 
 /// Indicates how thoroughly the map view is tracking the user location.
@@ -1107,11 +1109,13 @@ public:
 
 - (void)setContentInset:(UIEdgeInsets)contentInset
 {
+    MGLLogDebug(@"Setting contentInset: %@", NSStringFromUIEdgeInsets(contentInset));
     [self setContentInset:contentInset animated:NO];
 }
 
 - (void)setContentInset:(UIEdgeInsets)contentInset animated:(BOOL)animated
 {
+    MGLLogDebug(@"Setting contentInset: %@ animated:", NSStringFromUIEdgeInsets(contentInset), MGLStringFromBOOL(animated));
     if (UIEdgeInsetsEqualToEdgeInsets(contentInset, self.contentInset))
     {
         return;
@@ -1222,7 +1226,7 @@ public:
             self.mbglMap.setConstrainMode(mbgl::ConstrainMode::HeightOnly);
         }
 
-        _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(updateFromDisplayLink)];
+        _displayLink = [self.window.screen displayLinkWithTarget:self selector:@selector(updateFromDisplayLink)];
         [self updateDisplayLinkPreferredFramesPerSecond];
         [_displayLink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
         _needsDisplayRefresh = YES;
@@ -1273,6 +1277,7 @@ public:
 
 - (void)setPreferredFramesPerSecond:(MGLMapViewPreferredFramesPerSecond)preferredFramesPerSecond
 {
+    MGLLogDebug(@"Setting preferredFramesPerSecond: %ld", preferredFramesPerSecond);
     if (_preferredFramesPerSecond == preferredFramesPerSecond)
     {
         return;
@@ -1301,6 +1306,16 @@ public:
 
 - (void)sleepGL:(__unused NSNotification *)notification
 {
+    // If this view targets an external display, such as AirPlay or CarPlay, we
+    // can safely continue to render OpenGL content without tripping
+    // gpus_ReturnNotPermittedKillClient in libGPUSupportMercury, because the
+    // external connection keeps the application from truly receding to the
+    // background.
+    if (self.window.screen != [UIScreen mainScreen])
+    {
+        return;
+    }
+    
     MGLLogInfo(@"Entering background.");
     MGLAssertIsMainThread();
     
@@ -3314,12 +3329,10 @@ public:
     {
         latLngs.push_back({coordinates[i].latitude, coordinates[i].longitude});
     }
+    
+    CLLocationDirection cameraDirection = direction >= 0 ? direction : 0;
 
-    mbgl::CameraOptions cameraOptions = self.mbglMap.cameraForLatLngs(latLngs, padding);
-    if (direction >= 0)
-    {
-        cameraOptions.angle = direction;
-    }
+    mbgl::CameraOptions cameraOptions = self.mbglMap.cameraForLatLngs(latLngs, padding, cameraDirection);
 
     mbgl::AnimationOptions animationOptions;
     if (duration > 0)
@@ -4527,7 +4540,7 @@ public:
 
 - (BOOL)isMovingAnnotationIntoViewSupportedForAnnotation:(id<MGLAnnotation>)annotation animated:(BOOL)animated {
     // Consider delegating
-    return animated && [annotation isKindOfClass:[MGLPointAnnotation class]];
+    return [annotation isKindOfClass:[MGLPointAnnotation class]];
 }
 
 - (id <MGLAnnotation>)selectedAnnotation
@@ -4634,12 +4647,15 @@ public:
         CGPoint originPoint = [self convertCoordinate:origin toPointToView:self];
         calloutPositioningRect = { .origin = originPoint, .size = CGSizeZero };
     }
-
-    CGRect expandedPositioningRect = UIEdgeInsetsInsetRect(calloutPositioningRect, MGLMapViewOffscreenAnnotationPadding);
+    
+    CGRect expandedPositioningRect = calloutPositioningRect;
 
     // Used for callout positioning, and moving offscreen annotations onscreen.
-    CGRect constrainedRect = UIEdgeInsetsInsetRect(self.bounds, self.contentInset);
+    CGRect constrainedRect = self.contentFrame;
+    CGRect bounds = constrainedRect;
 
+    BOOL expandedPositioningRectToMoveCalloutIntoViewWithMargins = NO;
+    
     UIView <MGLCalloutView> *calloutView = nil;
 
     if ([annotation respondsToSelector:@selector(title)] &&
@@ -4710,37 +4726,55 @@ public:
         if (moveIntoView && [calloutView respondsToSelector:@selector(marginInsetsHintForPresentationFromRect:)]) {
             UIEdgeInsets margins = [calloutView marginInsetsHintForPresentationFromRect:calloutPositioningRect];
             expandedPositioningRect = UIEdgeInsetsInsetRect(expandedPositioningRect, margins);
+            expandedPositioningRectToMoveCalloutIntoViewWithMargins = YES;
         }
     }
+    
+    if (!expandedPositioningRectToMoveCalloutIntoViewWithMargins)
+    {
+        // We don't have a callout (OR our callout didn't implement
+        // marginInsetsHintForPresentationFromRect: - in this case we need to
+        // ensure that partially off-screen annotations are NOT moved into view.
+        //
+        // We may want to create (and fallback to) an `MGLMapViewDelegate` version
+        // of the `-[MGLCalloutView marginInsetsHintForPresentationFromRect:]
+        // protocol method.
+        bounds = CGRectInset(bounds, -calloutPositioningRect.size.width, -calloutPositioningRect.size.height);
+    }        
 
     if (moveIntoView)
     {
         moveIntoView = NO;
 
-        // Need to consider the content insets.
-        CGRect bounds = UIEdgeInsetsInsetRect(self.bounds, self.contentInset);
-
         // Any one of these cases should trigger a move onscreen
-        if (CGRectGetMinX(calloutPositioningRect) < CGRectGetMinX(bounds))
-        {
-            constrainedRect.origin.x = expandedPositioningRect.origin.x;
+        CGFloat minX = CGRectGetMinX(expandedPositioningRect);
+        
+        if (minX < CGRectGetMinX(bounds)) {
+            constrainedRect.origin.x = minX;
             moveIntoView = YES;
         }
-        else if (CGRectGetMaxX(calloutPositioningRect) > CGRectGetMaxX(bounds))
-        {
-            constrainedRect.origin.x = CGRectGetMaxX(expandedPositioningRect) - constrainedRect.size.width;
-            moveIntoView = YES;
+        else {
+            CGFloat maxX = CGRectGetMaxX(expandedPositioningRect);
+            
+            if (maxX > CGRectGetMaxX(bounds)) {
+                constrainedRect.origin.x = maxX - CGRectGetWidth(constrainedRect);
+                moveIntoView = YES;
+            }
         }
 
-        if (CGRectGetMinY(calloutPositioningRect) < CGRectGetMinY(bounds))
-        {
-            constrainedRect.origin.y = expandedPositioningRect.origin.y;
+        CGFloat minY = CGRectGetMinY(expandedPositioningRect);
+        
+        if (minY < CGRectGetMinY(bounds)) {
+            constrainedRect.origin.y = minY;
             moveIntoView = YES;
         }
-        else if (CGRectGetMaxY(calloutPositioningRect) > CGRectGetMaxY(bounds))
-        {
-            constrainedRect.origin.y = CGRectGetMaxY(expandedPositioningRect) - constrainedRect.size.height;
-            moveIntoView = YES;
+        else {
+            CGFloat maxY = CGRectGetMaxY(expandedPositioningRect);
+            
+            if (maxY > CGRectGetMaxY(bounds)) {
+                constrainedRect.origin.y = maxY - CGRectGetHeight(constrainedRect);
+                moveIntoView = YES;
+            }
         }
     }
 
@@ -4750,6 +4784,17 @@ public:
                       constrainedToRect:constrainedRect
                                animated:animateSelection];
 
+    // Save the anchor coordinate
+    if ([annotation isKindOfClass:[MGLPointAnnotation class]]) {
+        self.anchorCoordinateForSelectedAnnotation = annotation.coordinate;
+    }
+    else {
+        // This is used for features like polygons, so that if the map is dragged
+        // the callout doesn't ping to its coordinate.
+        CGPoint anchorPoint = CGPointMake(CGRectGetMidX(calloutPositioningRect), CGRectGetMidY(calloutPositioningRect));
+        self.anchorCoordinateForSelectedAnnotation = [self convertPoint:anchorPoint toCoordinateFromView:self];
+    }
+        
     // notify delegate
     if ([self.delegate respondsToSelector:@selector(mapView:didSelectAnnotation:)])
     {
@@ -4814,8 +4859,18 @@ public:
         return CGRectNull;
     }
     
+    CLLocationCoordinate2D coordinate;
+    
+    if ((annotation == self.selectedAnnotation) &&
+        CLLocationCoordinate2DIsValid(self.anchorCoordinateForSelectedAnnotation)) {
+        coordinate = self.anchorCoordinateForSelectedAnnotation;
+    }
+    else {
+        coordinate = annotation.coordinate;
+    }
+    
     if ([annotation isKindOfClass:[MGLMultiPoint class]]) {
-        CLLocationCoordinate2D origin = annotation.coordinate;
+        CLLocationCoordinate2D origin = coordinate;
         CGPoint originPoint = [self convertCoordinate:origin toPointToView:self];
         return CGRectMake(originPoint.x, originPoint.y, MGLAnnotationImagePaddingForHitTest, MGLAnnotationImagePaddingForHitTest);
     }
@@ -4830,7 +4885,7 @@ public:
         return CGRectZero;
     }
 
-    CGRect positioningRect = [self frameOfImage:image centeredAtCoordinate:annotation.coordinate];
+    CGRect positioningRect = [self frameOfImage:image centeredAtCoordinate:coordinate];
     positioningRect.origin.x -= 0.5;
 
     return CGRectInset(positioningRect, -MGLAnnotationImagePaddingForCallout,
@@ -4885,6 +4940,7 @@ public:
         // clean up
         self.calloutViewForSelectedAnnotation = nil;
         self.selectedAnnotation = nil;
+        self.anchorCoordinateForSelectedAnnotation = kCLLocationCoordinate2DInvalid;
 
         // notify delegate
         if ([self.delegate respondsToSelector:@selector(mapView:didDeselectAnnotation:)])
@@ -5267,11 +5323,13 @@ public:
 
 - (void)setTargetCoordinate:(CLLocationCoordinate2D)targetCoordinate
 {
+    MGLLogDebug(@"Setting targetCoordinate: %@", MGLStringFromCLLocationCoordinate2D(targetCoordinate));
     [self setTargetCoordinate:targetCoordinate animated:YES];
 }
 
 - (void)setTargetCoordinate:(CLLocationCoordinate2D)targetCoordinate animated:(BOOL)animated
 {
+    MGLLogDebug(@"Setting targetCoordinate: %@ animated: %@", MGLStringFromCLLocationCoordinate2D(targetCoordinate), MGLStringFromBOOL(animated));
     if (targetCoordinate.latitude != self.targetCoordinate.latitude
         || targetCoordinate.longitude != self.targetCoordinate.longitude)
     {
@@ -6148,7 +6206,9 @@ public:
             annotationView = self.userLocationAnnotationView;
         }
 
-        CGRect positioningRect = annotationView ? annotationView.frame : [self positioningRectForCalloutForAnnotationWithTag:tag];
+        CGRect positioningRect = annotationView ?
+            annotationView.frame :
+            [self positioningRectForCalloutForAnnotationWithTag:tag];
 
         MGLAssert( ! CGRectIsNull(positioningRect), @"Positioning rect should not be CGRectNull by this point");
 
@@ -6389,7 +6449,7 @@ public:
 
     // Link
     UIButton *linkButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [linkButton setTitle:NSLocalizedStringWithDefaultValue(@"FIRST_STEPS_URL", nil, nil, @"mapbox.com/help/first-steps-ios-sdk", @"Setup documentation URL display string; keep as short as possible") forState:UIControlStateNormal];
+    [linkButton setTitle:NSLocalizedStringWithDefaultValue(@"FIRST_STEPS_URL", nil, nil, @"docs.mapbox.com/help/tutorials/first-steps-ios-sdk", @"Setup documentation URL display string; keep as short as possible") forState:UIControlStateNormal];
     linkButton.translatesAutoresizingMaskIntoConstraints = NO;
     linkButton.titleLabel.numberOfLines = 0;
     [linkButton setContentCompressionResistancePriority:UILayoutPriorityDefaultLow

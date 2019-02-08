@@ -4,6 +4,66 @@ Mapbox welcomes participation and contributions from everyone.  If you'd like to
 
 ## master
 
+## 7.1.2 - February 7, 2019
+### Bugs
+ - Fix layer not rendering correctly when property value's negative [#13888](https://github.com/mapbox/mapbox-gl-native/pull/13888)
+
+## 7.1.1 - February 1, 2019
+### Bugs
+ - Fix a crash caused by the missing `Timber` dependency [#13847](https://github.com/mapbox/mapbox-gl-native/pull/13847)
+
+## 7.1.0 - January 30, 2019
+### Build
+ - Revert Android vendorization, add submodule pinning [#13815](https://github.com/mapbox/mapbox-gl-native/pull/13815)
+
+## 7.1.0-beta.1 - January 23, 2019
+### Bugs
+ - Ignore unused C++ arguments for all build environments [#13774](https://github.com/mapbox/mapbox-gl-native/pull/13774)
+ - Import gesture detector dimens using the correct package structure [#13750](https://github.com/mapbox/mapbox-gl-native/pull/13750)
+ - Restore location layer visibility with new "layer-below" [#13771](https://github.com/mapbox/mapbox-gl-native/pull/13771)
+ - Rename required TransitionOptions field [#13769](https://github.com/mapbox/mapbox-gl-native/pull/13769)
+
+### Build
+ - Ignore unused C++ arguments for all build environments [#13774](https://github.com/mapbox/mapbox-gl-native/pull/13774)
+ - Update to NDK 19, migrate STL experimental/optional [#13049](https://github.com/mapbox/mapbox-gl-native/pull/13049)
+
+## 7.1.0-alpha.3 - January 21, 2019
+### Features
+ - Add library loading to peer objects [#13758](https://github.com/mapbox/mapbox-gl-native/pull/13758)
+ - Remove tile sorting from the clip and mask algorithms [#13756](https://github.com/mapbox/mapbox-gl-native/pull/13756)
+ - Ability to disable any layer using pre-processing flags [#13717](https://github.com/mapbox/mapbox-gl-native/pull/13717)
+ - Make library loader load the native library once [#13748](https://github.com/mapbox/mapbox-gl-native/pull/13748)
+ - Allow offline and snapshotter to be disabled [#13730](https://github.com/mapbox/mapbox-gl-native/pull/13730)
+ - Sorted render tiles for TilePyramid [#13739](https://github.com/mapbox/mapbox-gl-native/pull/13739)
+
+### Bugs
+ - Adjust maven pom file with vendorized libraries versions [#13765](https://github.com/mapbox/mapbox-gl-native/pull/13765)
+ - Update attribution feedback URL in code and tests [#13710](https://github.com/mapbox/mapbox-gl-native/pull/13710)
+ - Re-apply location components "layer-below" when changed [#13749](https://github.com/mapbox/mapbox-gl-native/pull/13749)
+ - Avoid leaking CompassView context through animator [#13743](https://github.com/mapbox/mapbox-gl-native/pull/13743)
+ - Allow resetting fps listener [#13733](https://github.com/mapbox/mapbox-gl-native/pull/13733)
+
+## 7.1.0-alpha.2 - January 16, 2019
+ - Do not invoke #onCancel when animation is scheduled from #onFinish block [#13737](https://github.com/mapbox/mapbox-gl-native/pull/13737)
+ - Updated licenses after Android vendorization [#13738](https://github.com/mapbox/mapbox-gl-native/pull/13738)
+ - Use QueryFeatureExtension to query the map for supercluster v0.3.0 properties, add api for getLeaves, getChildren and getNextExpansionZoom [#13631](https://github.com/mapbox/mapbox-gl-native/pull/13631)
+ - Restore correct Snapshot attribution, make attribution parser backwards compatible [#13732](https://github.com/mapbox/mapbox-gl-native/pull/13732)
+ - Vendorize Android Mapbox dependencies [#13712](https://github.com/mapbox/mapbox-gl-native/pull/13712)
+ - Introduce NativeMap abstraction, remove static code block removal utility [#13681](https://github.com/mapbox/mapbox-gl-native/pull/13681)
+ - Notify requests about network reachability in priority order [#13721](https://github.com/mapbox/mapbox-gl-native/pull/13721)
+ - SymbolBucket, use single map for paint properties data [#13724](https://github.com/mapbox/mapbox-gl-native/pull/13724)
+ - Avoid NullPointerException when quickly closing activity for attribution click handling [#13723](https://github.com/mapbox/mapbox-gl-native/pull/13723)
+ - Return constexpr strings from functions to avoid ODR compile failures [#13720](https://github.com/mapbox/mapbox-gl-native/pull/13720)
+ - Split layer type specific code in mbgl::Programs [#13577](https://github.com/mapbox/mapbox-gl-native/pull/13577)
+ - Shader program must always match bucket in render symbol layer [#13667](https://github.com/mapbox/mapbox-gl-native/pull/13667)
+ - Implement Google benchmark runner for Android platform [#13628](https://github.com/mapbox/mapbox-gl-native/pull/13628)
+ - Avoid leaking attribution dialog when hosting context is stopped [#13673](https://github.com/mapbox/mapbox-gl-native/pull/13673)
+ - Android test runner for core unit tests [#13617](https://github.com/mapbox/mapbox-gl-native/pull/13617)
+ - Throw IllegalStateException when when setting an maximum fps while the mapRenderer isn't created yet [#13706](https://github.com/mapbox/mapbox-gl-native/pull/13706)
+ - Lift Parceable interface to OfflineRegionDefinition [#13688](https://github.com/mapbox/mapbox-gl-native/pull/13688)
+ - Espresso test rework [#13576](https://github.com/mapbox/mapbox-gl-native/pull/13576)
+
+
 ## 7.0.1 - January 11, 2019
  - Experimental setMaximumFps configuration on MapView [#13498](https://github.com/mapbox/mapbox-gl-native/pull/13498)
 

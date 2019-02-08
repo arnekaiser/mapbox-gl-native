@@ -1,10 +1,12 @@
 package com.mapbox.mapboxsdk.maps;
 
 import android.graphics.Bitmap;
+import android.os.AsyncTask;
 import android.support.annotation.IntRange;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.StringDef;
+import android.util.DisplayMetrics;
 import com.mapbox.mapboxsdk.constants.MapboxConstants;
 import com.mapbox.mapboxsdk.style.layers.Layer;
 import com.mapbox.mapboxsdk.style.layers.TransitionOptions;
@@ -13,6 +15,8 @@ import com.mapbox.mapboxsdk.style.sources.Source;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.ref.WeakReference;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,9 +30,10 @@ import java.util.Map;
  * has been loaded by underlying map.
  * </p>
  */
+@SuppressWarnings("unchecked")
 public class Style {
 
-  private final NativeMapView nativeMapView;
+  private final NativeMap nativeMap;
   private final HashMap<String, Source> sources = new HashMap<>();
   private final HashMap<String, Layer> layers = new HashMap<>();
   private final HashMap<String, Bitmap> images = new HashMap<>();
@@ -38,12 +43,12 @@ public class Style {
   /**
    * Private constructor to build a style object.
    *
-   * @param builder       the builder used for creating this style
-   * @param nativeMapView the map object used to load this style
+   * @param builder   the builder used for creating this style
+   * @param nativeMap the map object used to load this style
    */
-  private Style(@NonNull Builder builder, @NonNull NativeMapView nativeMapView) {
+  private Style(@NonNull Builder builder, @NonNull NativeMap nativeMap) {
     this.builder = builder;
-    this.nativeMapView = nativeMapView;
+    this.nativeMap = nativeMap;
   }
 
   /**
@@ -54,7 +59,7 @@ public class Style {
   @NonNull
   public String getUrl() {
     validateState("getUrl");
-    return nativeMapView.getStyleUrl();
+    return nativeMap.getStyleUrl();
   }
 
   /**
@@ -65,7 +70,7 @@ public class Style {
   @NonNull
   public String getJson() {
     validateState("getJson");
-    return nativeMapView.getStyleJson();
+    return nativeMap.getStyleJson();
   }
 
   //
@@ -80,7 +85,7 @@ public class Style {
   @NonNull
   public List<Source> getSources() {
     validateState("getSources");
-    return nativeMapView.getSources();
+    return nativeMap.getSources();
   }
 
   /**
@@ -91,7 +96,7 @@ public class Style {
   public void addSource(@NonNull Source source) {
     validateState("addSource");
     sources.put(source.getId(), source);
-    nativeMapView.addSource(source);
+    nativeMap.addSource(source);
   }
 
   /**
@@ -105,7 +110,7 @@ public class Style {
     validateState("getSource");
     Source source = sources.get(id);
     if (source == null) {
-      source = nativeMapView.getSource(id);
+      source = nativeMap.getSource(id);
     }
     return source;
   }
@@ -124,7 +129,7 @@ public class Style {
     if (sources.containsKey(sourceId)) {
       return (T) sources.get(sourceId);
     }
-    return (T) nativeMapView.getSource(sourceId);
+    return (T) nativeMap.getSource(sourceId);
   }
 
   /**
@@ -136,7 +141,7 @@ public class Style {
   public boolean removeSource(@NonNull String sourceId) {
     validateState("removeSource");
     sources.remove(sourceId);
-    return nativeMapView.removeSource(sourceId);
+    return nativeMap.removeSource(sourceId);
   }
 
   /**
@@ -148,7 +153,7 @@ public class Style {
   public boolean removeSource(@NonNull Source source) {
     validateState("removeSource");
     sources.remove(source.getId());
-    return nativeMapView.removeSource(source);
+    return nativeMap.removeSource(source);
   }
 
   //
@@ -163,7 +168,7 @@ public class Style {
   public void addLayer(@NonNull Layer layer) {
     validateState("addLayer");
     layers.put(layer.getId(), layer);
-    nativeMapView.addLayer(layer);
+    nativeMap.addLayer(layer);
   }
 
   /**
@@ -175,7 +180,7 @@ public class Style {
   public void addLayerBelow(@NonNull Layer layer, @NonNull String below) {
     validateState("addLayerBelow");
     layers.put(layer.getId(), layer);
-    nativeMapView.addLayerBelow(layer, below);
+    nativeMap.addLayerBelow(layer, below);
   }
 
   /**
@@ -187,7 +192,7 @@ public class Style {
   public void addLayerAbove(@NonNull Layer layer, @NonNull String above) {
     validateState("addLayerAbove");
     layers.put(layer.getId(), layer);
-    nativeMapView.addLayerAbove(layer, above);
+    nativeMap.addLayerAbove(layer, above);
   }
 
   /**
@@ -200,7 +205,7 @@ public class Style {
   public void addLayerAt(@NonNull Layer layer, @IntRange(from = 0) int index) {
     validateState("addLayerAbove");
     layers.put(layer.getId(), layer);
-    nativeMapView.addLayerAt(layer, index);
+    nativeMap.addLayerAt(layer, index);
   }
 
   /**
@@ -214,7 +219,7 @@ public class Style {
     validateState("getLayer");
     Layer layer = layers.get(id);
     if (layer == null) {
-      layer = nativeMapView.getLayer(id);
+      layer = nativeMap.getLayer(id);
     }
     return layer;
   }
@@ -230,7 +235,7 @@ public class Style {
   public <T extends Layer> T getLayerAs(@NonNull String layerId) {
     validateState("getLayerAs");
     // noinspection unchecked
-    return (T) nativeMapView.getLayer(layerId);
+    return (T) nativeMap.getLayer(layerId);
   }
 
   /**
@@ -241,7 +246,7 @@ public class Style {
   @NonNull
   public List<Layer> getLayers() {
     validateState("getLayers");
-    return nativeMapView.getLayers();
+    return nativeMap.getLayers();
   }
 
   /**
@@ -253,7 +258,7 @@ public class Style {
   public boolean removeLayer(@NonNull String layerId) {
     validateState("removeLayer");
     layers.remove(layerId);
-    return nativeMapView.removeLayer(layerId);
+    return nativeMap.removeLayer(layerId);
   }
 
   /**
@@ -265,7 +270,7 @@ public class Style {
   public boolean removeLayer(@NonNull Layer layer) {
     validateState("removeLayer");
     layers.remove(layer.getId());
-    return nativeMapView.removeLayer(layer);
+    return nativeMap.removeLayer(layer);
   }
 
   /**
@@ -276,7 +281,7 @@ public class Style {
    */
   public boolean removeLayerAt(@IntRange(from = 0) int index) {
     validateState("removeLayerAt");
-    return nativeMapView.removeLayerAt(index);
+    return nativeMap.removeLayerAt(index);
   }
 
   //
@@ -296,21 +301,28 @@ public class Style {
   /**
    * Adds an image to be used in the map's style
    *
-   * @param name  the name of the image
-   * @param image the pre-multiplied Bitmap
-   * @param sdf   the flag indicating image is an SDF or template image
+   * @param name   the name of the image
+   * @param bitmap the pre-multiplied Bitmap
+   * @param sdf    the flag indicating image is an SDF or template image
    */
-  public void addImage(@NonNull String name, @NonNull Bitmap image, boolean sdf) {
+  public void addImage(@NonNull final String name, @NonNull final Bitmap bitmap, boolean sdf) {
     validateState("addImage");
-    nativeMapView.addImage(name, image, sdf);
+    new BitmapImageConversionTask(nativeMap, sdf).execute(new Builder.ImageWrapper(name, bitmap, sdf));
   }
 
   /**
    * Adds an images to be used in the map's style.
    */
   public void addImages(@NonNull HashMap<String, Bitmap> images) {
+    addImages(images, false);
+  }
+
+  /**
+   * Adds an images to be used in the map's style.
+   */
+  public void addImages(@NonNull HashMap<String, Bitmap> images, boolean sdf) {
     validateState("addImages");
-    nativeMapView.addImages(images);
+    new BitmapImageConversionTask(nativeMap, sdf).execute(Builder.ImageWrapper.convertToImageArray(images, sdf));
   }
 
   /**
@@ -320,7 +332,7 @@ public class Style {
    */
   public void removeImage(@NonNull String name) {
     validateState("removeImage");
-    nativeMapView.removeImage(name);
+    nativeMap.removeImage(name);
   }
 
   /**
@@ -332,7 +344,7 @@ public class Style {
   @Nullable
   public Bitmap getImage(@NonNull String id) {
     validateState("getImage");
-    return nativeMapView.getImage(id);
+    return nativeMap.getImage(id);
   }
 
   //
@@ -349,8 +361,7 @@ public class Style {
    */
   public void setTransition(@NonNull TransitionOptions transitionOptions) {
     validateState("setTransition");
-    nativeMapView.setTransitionDuration(transitionOptions.getDuration());
-    nativeMapView.setTransitionDelay(transitionOptions.getDelay());
+    nativeMap.setTransitionOptions(transitionOptions);
   }
 
   /**
@@ -364,7 +375,7 @@ public class Style {
   @NonNull
   public TransitionOptions getTransition() {
     validateState("getTransition");
-    return new TransitionOptions(nativeMapView.getTransitionDuration(), nativeMapView.getTransitionDelay());
+    return nativeMap.getTransitionOptions();
   }
 
   //
@@ -379,7 +390,7 @@ public class Style {
   @Nullable
   public Light getLight() {
     validateState("getLight");
-    return nativeMapView.getLight();
+    return nativeMap.getLight();
   }
 
   //
@@ -395,19 +406,19 @@ public class Style {
     for (Source source : sources.values()) {
       if (source != null) {
         source.setDetached();
-        nativeMapView.removeSource(source);
+        nativeMap.removeSource(source);
       }
     }
 
     for (Layer layer : layers.values()) {
       if (layer != null) {
         layer.setDetached();
-        nativeMapView.removeLayer(layer);
+        nativeMap.removeLayer(layer);
       }
     }
 
     for (Map.Entry<String, Bitmap> bitmapEntry : images.entrySet()) {
-      nativeMapView.removeImage(bitmapEntry.getKey());
+      nativeMap.removeImage(bitmapEntry.getKey());
       bitmapEntry.getValue().recycle();
     }
 
@@ -671,11 +682,11 @@ public class Style {
     /**
      * Build the composed style.
      */
-    Style build(@NonNull NativeMapView nativeMapView) {
-      return new Style(this, nativeMapView);
+    Style build(@NonNull NativeMap nativeMap) {
+      return new Style(this, nativeMap);
     }
 
-    class ImageWrapper {
+    static class ImageWrapper {
       Bitmap bitmap;
       String id;
       boolean sdf;
@@ -684,6 +695,16 @@ public class Style {
         this.id = id;
         this.bitmap = bitmap;
         this.sdf = sdf;
+      }
+
+      static ImageWrapper[] convertToImageArray(HashMap<String, Bitmap> bitmapHashMap, boolean sdf) {
+        ImageWrapper[] images = new ImageWrapper[bitmapHashMap.size()];
+        List<String> keyList = new ArrayList<>(bitmapHashMap.keySet());
+        for (int i = 0; i < bitmapHashMap.size(); i++) {
+          String id = keyList.get(i);
+          images[i] = new ImageWrapper(id, bitmapHashMap.get(id), sdf);
+        }
+        return images;
       }
     }
 
@@ -719,6 +740,53 @@ public class Style {
       LayerAtWrapper(Layer layer, int index) {
         super(layer);
         this.index = index;
+      }
+    }
+  }
+
+  private static class BitmapImageConversionTask extends AsyncTask<Builder.ImageWrapper, Void, List<Image>> {
+
+    private WeakReference<NativeMap> nativeMap;
+    private boolean sdf;
+
+    BitmapImageConversionTask(NativeMap nativeMap, boolean sdf) {
+      this.nativeMap = new WeakReference<>(nativeMap);
+      this.sdf = sdf;
+    }
+
+    @NonNull
+    @Override
+    protected List<Image> doInBackground(Builder.ImageWrapper... params) {
+      List<Image> images = new ArrayList<>();
+      ByteBuffer buffer;
+      String name;
+      Bitmap bitmap;
+
+      for (Builder.ImageWrapper param : params) {
+        name = param.id;
+        bitmap = param.bitmap;
+
+        if (bitmap.getConfig() != Bitmap.Config.ARGB_8888) {
+          bitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false);
+        }
+
+        buffer = ByteBuffer.allocate(bitmap.getByteCount());
+        bitmap.copyPixelsToBuffer(buffer);
+
+        float pixelRatio = (float) bitmap.getDensity() / DisplayMetrics.DENSITY_DEFAULT;
+
+        images.add(new Image(buffer.array(), pixelRatio, name, bitmap.getWidth(), bitmap.getHeight(), sdf));
+      }
+
+      return images;
+    }
+
+    @Override
+    protected void onPostExecute(@NonNull List<Image> images) {
+      super.onPostExecute(images);
+      NativeMap nativeMap = this.nativeMap.get();
+      if (nativeMap != null && !nativeMap.isDestroyed()) {
+        nativeMap.addImages(images.toArray(new Image[images.size()]));
       }
     }
   }
@@ -792,7 +860,7 @@ public class Style {
   /**
    * Traffic Day: Color-coded roads based on live traffic congestion data. Traffic data is currently
    * available in
-   * <a href="https://www.mapbox.com/api-documentation/pages/traffic-countries.html">these select
+   * <a href="https://www.mapbox.com/help/how-directions-work/#traffic-data">these select
    * countries</a>. Using this constant means your map style will always use the latest version and
    * may change as we improve the style.
    */
@@ -801,7 +869,7 @@ public class Style {
   /**
    * Traffic Night: Color-coded roads based on live traffic congestion data, designed to maximize
    * legibility in low-light situations. Traffic data is currently available in
-   * <a href="https://www.mapbox.com/api-documentation/pages/traffic-countries.html">these select
+   * <a href="https://www.mapbox.com/help/how-directions-work/#traffic-data">these select
    * countries</a>. Using this constant means your map style will always use the latest version and
    * may change as we improve the style.
    */
